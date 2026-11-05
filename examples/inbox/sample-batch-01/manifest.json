@@ -1,95 +1,95 @@
 {
-  "description": "Synthetic intake batch with valid, duplicate, invalid and unsupported documents",
+  "description": "Синтетическая пачка с валидными, дублирующимися, ошибочными и неподдерживаемыми документами",
   "entries": [
     {
       "file": "mail/01_invoice_pdf.eml",
       "expected": "processed",
-      "note": "PDF invoice"
+      "note": "Счёт в PDF"
     },
     {
       "file": "mail/02_invoice_docx.eml",
       "expected": "processed",
-      "note": "DOCX invoice"
+      "note": "Счёт в DOCX"
     },
     {
       "file": "mail/03_invoice_scan.eml",
       "expected": "processed",
-      "note": "PNG scan, OCR"
+      "note": "PNG-скан, OCR"
     },
     {
       "file": "mail/04_duplicate.eml",
       "expected": "duplicate",
-      "note": "same bytes as 01"
+      "note": "те же байты, что в 01"
     },
     {
       "file": "mail/05_no_attachment.eml",
       "expected": "ignored",
-      "note": "no attachments"
+      "note": "без вложений"
     },
     {
       "file": "mail/06_unsupported_zip.eml",
       "expected": "dead_letter",
-      "note": "ZIP attachment"
+      "note": "ZIP-вложение"
     },
     {
       "file": "drop/invoice_sample_001.pdf",
       "expected": "processed",
-      "note": "PDF invoice"
+      "note": "Счёт в PDF"
     },
     {
       "file": "drop/invoice_sample_002.docx",
       "expected": "processed",
-      "note": "DOCX invoice"
+      "note": "Счёт в DOCX"
     },
     {
       "file": "drop/invoice_sample_003.xlsx",
       "expected": "processed",
-      "note": "XLSX invoice"
+      "note": "Счёт в XLSX"
     },
     {
       "file": "drop/invoice_sample_004.csv",
       "expected": "processed",
-      "note": "CSV invoice"
+      "note": "Счёт в CSV"
     },
     {
       "file": "drop/invoice_sample_005.png",
       "expected": "processed",
-      "note": "PNG scan, OCR"
+      "note": "PNG-скан, OCR"
     },
     {
       "file": "drop/quality_act_sample.pdf",
       "expected": "needs_review",
-      "note": "quality act with mismatch"
+      "note": "акт качества с расхождением"
     },
     {
       "file": "drop/quality_act_sample.png",
       "expected": "needs_review",
-      "note": "quality act scan, OCR"
+      "note": "скан акта качества, OCR"
     },
     {
       "file": "drop/broken_sample.pdf",
       "expected": "dead_letter",
-      "note": "truncated PDF"
+      "note": "обрезанный PDF"
     },
     {
       "file": "drop/empty_sample.xlsx",
       "expected": "rejected",
-      "note": "zero-byte upload is rejected"
+      "note": "пустая загрузка отклоняется"
     },
     {
       "file": "drop/unsupported_sample.zip",
       "expected": "dead_letter",
-      "note": "unsupported archive"
+      "note": "неподдерживаемый архив"
     },
     {
       "file": "drop/invoice_negative_qty.csv",
       "expected": "needs_review",
-      "note": "negative quantity"
+      "note": "отрицательное количество"
     },
     {
       "file": "drop/invoice_wrong_units.xlsx",
       "expected": "needs_review",
-      "note": "wrong units and total mismatch"
+      "note": "неверные единицы и расхождение суммы"
     }
   ]
 }

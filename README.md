@@ -1,89 +1,90 @@
 # Async Document Queue
 
 [![CI](https://github.com/Nikita-Kotlyar/async-document-queue/actions/workflows/ci.yml/badge.svg)](https://github.com/Nikita-Kotlyar/async-document-queue/actions/workflows/ci.yml)
-[![Coverage](https://img.shields.io/badge/coverage-79%25-brightgreen)](#testing)
+[![Coverage](https://img.shields.io/badge/coverage-79%25-brightgreen)](#тестирование)
 [![Python](https://img.shields.io/badge/Python-3.13-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
-Asynchronous document ingestion pipeline: upload or email intake → RabbitMQ →
-Celery workers → extraction, OCR and validation → PostgreSQL → signed webhooks.
+Асинхронный конвейер приёма документов: загрузка через API или почту → RabbitMQ →
+Celery-воркеры → извлечение, OCR и валидация → PostgreSQL → подписанные webhooks.
 
-## Problem
+## Проблема
 
-Supplier invoices and quality acts arrive as PDF, DOCX, XLSX, CSV and scanned
-PNG files. Some files are duplicates, some are corrupt, and some contain
-inconsistent totals, units or business keys. Manual processing loses documents
-and makes it impossible to prove that a file was processed exactly once.
+Счета и акты качества приходят от поставщиков в форматах PDF, DOCX, XLSX, CSV и
+PNG-сканов. Часть файлов дублируется, часть повреждена, в части документов
+расходятся суммы, единицы измерения и бизнес-ключи. При ручной обработке
+документы теряются, а доказать, что каждый файл обработан ровно один раз,
+невозможно.
 
-The service accepts each document, deduplicates it by SHA-256, extracts structured
-fields, runs OCR when needed, validates the result, publishes a signed webhook and
-retries transient failures. Documents that exhaust retries are moved to a
-dead-letter queue for manual review.
+Сервис принимает документ, дедуплицирует его по SHA-256, извлекает структурированные поля,
+при необходимости запускает OCR, валидирует результат, публикует подписанный
+webhook и повторяет временные сбои. Документы, исчерпавшие попытки, попадают в
+dead-letter очередь для ручного разбора.
 
-## Architecture
+## Архитектура
 
 ```mermaid
 flowchart LR
-    A["Upload API / email / folder intake"] --> B[("PostgreSQL")]
+    A["API / почта / папка"] --> B[("PostgreSQL")]
     A --> C["RabbitMQ: documents"]
-    C --> D["Celery: documents worker"]
-    D --> E["Extraction + OCR"]
-    E --> F["Validation"]
+    C --> D["Celery: обработка документов"]
+    D --> E["Извлечение + OCR"]
+    E --> F["Валидация"]
     F --> B
     F --> G["RabbitMQ: webhooks"]
-    G --> H["Celery: webhook worker"]
-    H --> I["Webhook receiver / 1C / CRM"]
+    G --> H["Celery: доставка webhooks"]
+    H --> I["Webhook-приёмник / 1C / CRM"]
     D --> J["RabbitMQ: dlq"]
     H --> J
 ```
 
-| Component | Role | Host port |
+| Компонент | Роль | Порт на хосте |
 |---|---|---|
-| `api` | FastAPI ingestion and query API | `ADQ_API_PORT` (default `8081`) |
-| `worker` | Celery workers for documents, OCR and webhooks | internal |
-| `beat` | Periodic stale-job reaper | internal |
-| `intake` | Async mailbox and folder watcher | internal |
-| `webhook-sink` | Reference receiver for signed webhook events | `ADQ_WEBHOOK_PORT` (default `8090`) |
-| `db` | PostgreSQL 16 | `ADQ_POSTGRES_PORT` (default `5433`) |
-| `redis` | Distributed locks, idempotency, fault injection | `ADQ_REDIS_PORT` (default `6380`) |
-| `rabbitmq` | Broker, queues and dead-letter exchange | `ADQ_RABBITMQ_PORT` (default `5672`) |
-| `rabbitmq` management | Queue and exchange UI | `ADQ_RABBITMQ_MANAGEMENT_PORT` (default `15672`) |
+| `api` | FastAPI: загрузка, запросы, статистика | `ADQ_API_PORT` (по умолчанию `8081`) |
+| `worker` | Celery: документы, OCR, webhooks | внутренний |
+| `beat` | Периодическая очистка зависших задач | внутренний |
+| `intake` | Асинхронный watcher почты и папки | внутренний |
+| `webhook-sink` | Эталонный приёмник подписанных событий | `ADQ_WEBHOOK_PORT` (по умолчанию `8090`) |
+| `db` | PostgreSQL 16 | `ADQ_POSTGRES_PORT` (по умолчанию `5433`) |
+| `redis` | Distributed locks, идемпотентность, fault injection | `ADQ_REDIS_PORT` (по умолчанию `6380`) |
+| `rabbitmq` | Брокер, очереди и dead-letter exchange | `ADQ_RABBITMQ_PORT` (по умолчанию `5672`) |
+| `rabbitmq` management | UI очередей и exchange | `ADQ_RABBITMQ_MANAGEMENT_PORT` (по умолчанию `15672`) |
 
-## Tech stack
+## Стек
 
-| Layer | Technology |
+| Слой | Технологии |
 |---|---|
 | API | FastAPI, Pydantic v2, OpenAPI |
-| Async I/O | asyncio, `httpx.AsyncClient`, SQLAlchemy async |
-| Queue | Celery, RabbitMQ, dead-letter exchange |
-| Storage | PostgreSQL 16, Alembic |
-| Locks and fault injection | Redis 7 |
-| Documents | pypdf, PyMuPDF, python-docx, openpyxl, Pillow, Tesseract |
-| Webhooks | HMAC-SHA256 signatures, retries, event ids |
-| Infrastructure | Docker, Docker Compose, healthchecks |
-| Quality | pytest, pytest-asyncio, pytest-timeout, coverage, ruff |
+| Асинхронный ввод-вывод | asyncio, `httpx.AsyncClient`, SQLAlchemy async |
+| Очереди | Celery, RabbitMQ, dead-letter exchange |
+| Хранилище | PostgreSQL 16, Alembic |
+| Блокировки и fault injection | Redis 7 |
+| Документы | pypdf, PyMuPDF, python-docx, openpyxl, Pillow, Tesseract |
+| Webhooks | HMAC-SHA256, повторы, стабильные event id |
+| Инфраструктура | Docker, Docker Compose, healthchecks |
+| Качество | pytest, pytest-asyncio, pytest-timeout, coverage, ruff |
 
-## Quick start
+## Быстрый старт
 
 ```bash
 cp .env.example .env
-# Fill in POSTGRES_PASSWORD, RABBITMQ_DEFAULT_PASS and ADQ_WEBHOOK_SECRET.
+# Заполни POSTGRES_PASSWORD, RABBITMQ_DEFAULT_PASS и ADQ_WEBHOOK_SECRET.
 docker compose up -d --build
 docker compose ps
 ```
 
-The API is exposed on the host port configured by `ADQ_API_PORT` (default
-`8081`). Swagger UI is available at `/docs`. RabbitMQ Management uses
-`ADQ_RABBITMQ_MANAGEMENT_PORT` (default `15672`).
+API доступен на порту, заданном в `ADQ_API_PORT` (по умолчанию `8081`).
+Swagger UI — по пути `/docs`. RabbitMQ Management использует
+`ADQ_RABBITMQ_MANAGEMENT_PORT` (по умолчанию `15672`).
 
-Create a document:
+Загрузка документа:
 
 ```bash
 curl -X POST "http://<host>:${ADQ_API_PORT:-8081}/api/v1/documents" \
   -F "file=@examples/inbox/sample-batch-01/drop/invoice_sample_001.pdf"
 ```
 
-Check status:
+Проверка статуса:
 
 ```bash
 curl "http://<host>:${ADQ_API_PORT:-8081}/api/v1/documents"
@@ -91,133 +92,140 @@ curl "http://<host>:${ADQ_API_PORT:-8081}/api/v1/stats"
 curl "http://<host>:${ADQ_API_PORT:-8081}/api/v1/dead-letter"
 ```
 
-## Configuration
+## Конфигурация
 
-All settings use the `ADQ_` prefix and can be supplied through `.env` or the
-environment. Required values have no production default.
+Все настройки используют префикс `ADQ_` и задаются через `.env` или переменные
+окружения. Обязательные значения не имеют production-дефолтов.
 
-| Variable | Purpose | Required | Default |
+| Переменная | Назначение | Обязательна | По умолчанию |
 |---|---|---|---|
-| `POSTGRES_PASSWORD` | PostgreSQL password | yes | — |
-| `RABBITMQ_DEFAULT_PASS` | RabbitMQ password | yes | — |
-| `ADQ_DATABASE_URL` | Async SQLAlchemy URL | yes | — |
-| `ADQ_SYNC_DATABASE_URL` | Sync SQLAlchemy URL for Alembic/Celery | yes | — |
-| `ADQ_BROKER_URL` | AMQP broker URL | yes | — |
-| `ADQ_WEBHOOK_SECRET` | HMAC secret for webhook signatures | yes | — |
-| `ADQ_REDIS_URL` | Redis URL | no | `redis://redis:6379/0` |
-| `ADQ_API_KEY` | Optional API key for admin endpoints | no | empty |
-| `ADQ_API_PORT` | Published API port | no | `8081` |
-| `ADQ_POSTGRES_PORT` | Published PostgreSQL port | no | `5433` |
-| `ADQ_REDIS_PORT` | Published Redis port | no | `6380` |
-| `ADQ_RABBITMQ_PORT` | Published AMQP port | no | `5672` |
-| `ADQ_RABBITMQ_MANAGEMENT_PORT` | Published management UI port | no | `15672` |
-| `ADQ_WEBHOOK_PORT` | Published webhook-sink port | no | `8090` |
-| `ADQ_MAX_UPLOAD_MB` | Maximum upload size | no | `25` |
-| `ADQ_TASK_MAX_RETRIES` | Celery retry limit | no | `3` |
-| `ADQ_WEBHOOK_MAX_ATTEMPTS` | Webhook delivery limit | no | `4` |
-| `ADQ_ENABLE_FAULT_INJECTION` | Enables controlled OCR/webhook failures | no | `true` |
+| `POSTGRES_PASSWORD` | Пароль PostgreSQL | да | — |
+| `RABBITMQ_DEFAULT_PASS` | Пароль RabbitMQ | да | — |
+| `ADQ_DATABASE_URL` | Async URL для SQLAlchemy | да | — |
+| `ADQ_SYNC_DATABASE_URL` | Sync URL для Alembic и Celery | да | — |
+| `ADQ_BROKER_URL` | AMQP URL брокера | да | — |
+| `ADQ_WEBHOOK_SECRET` | Секрет HMAC для webhook-подписи | да | — |
+| `ADQ_REDIS_URL` | URL Redis | нет | `redis://redis:6379/0` |
+| `ADQ_API_KEY` | Опциональный ключ для admin-эндпоинтов | нет | пусто |
+| `ADQ_API_PORT` | Порт API на хосте | нет | `8081` |
+| `ADQ_POSTGRES_PORT` | Порт PostgreSQL на хосте | нет | `5433` |
+| `ADQ_REDIS_PORT` | Порт Redis на хосте | нет | `6380` |
+| `ADQ_RABBITMQ_PORT` | Порт AMQP на хосте | нет | `5672` |
+| `ADQ_RABBITMQ_MANAGEMENT_PORT` | Порт RabbitMQ UI | нет | `15672` |
+| `ADQ_WEBHOOK_PORT` | Порт webhook-sink | нет | `8090` |
+| `ADQ_MAX_UPLOAD_MB` | Максимальный размер файла | нет | `25` |
+| `ADQ_TASK_MAX_RETRIES` | Лимит повторов Celery | нет | `3` |
+| `ADQ_WEBHOOK_MAX_ATTEMPTS` | Лимит доставок webhook | нет | `4` |
+| `ADQ_ENABLE_FAULT_INJECTION` | Управляемые сбои OCR/webhook | нет | `true` |
 
 ## API
 
-| Method | Path | Purpose |
+| Метод | Путь | Назначение |
 |---|---|---|
-| `POST` | `/api/v1/documents` | Upload a document; `Idempotency-Key` supported |
-| `GET` | `/api/v1/documents` | List with status, type, priority and pagination |
-| `GET` | `/api/v1/documents/{id}` | Document, extraction, jobs, issues, deliveries |
-| `POST` | `/api/v1/documents/{id}/reprocess` | Re-enqueue a document |
-| `GET` | `/api/v1/dead-letter` | List dead-letter entries |
-| `POST` | `/api/v1/dead-letter/{id}/retry` | Replay a dead-letter document or delivery |
-| `GET` | `/api/v1/stats` | Aggregated status and delivery counts |
-| `POST` | `/api/v1/webhooks/endpoints` | Register a webhook receiver |
-| `GET` | `/api/v1/webhooks/deliveries` | Inspect delivery attempts |
-| `POST` | `/api/v1/admin/faults` | Controlled fault injection |
-| `GET` | `/health`, `/ready`, `/metrics` | Operational endpoints |
+| `POST` | `/api/v1/documents` | Загрузка документа; поддерживается `Idempotency-Key` |
+| `GET` | `/api/v1/documents` | Список с фильтрами, статусами и пагинацией |
+| `GET` | `/api/v1/documents/{id}` | Документ, извлечение, задачи, проблемы, доставки |
+| `POST` | `/api/v1/documents/{id}/reprocess` | Повторная постановка в очередь |
+| `GET` | `/api/v1/dead-letter` | Список dead-letter записей |
+| `POST` | `/api/v1/dead-letter/{id}/retry` | Повторный запуск документа или доставки |
+| `GET` | `/api/v1/stats` | Агрегированная статистика |
+| `POST` | `/api/v1/webhooks/endpoints` | Регистрация получателя webhook |
+| `GET` | `/api/v1/webhooks/deliveries` | История попыток доставки |
+| `POST` | `/api/v1/admin/faults` | Управляемая инъекция сбоя |
+| `GET` | `/health`, `/ready`, `/metrics` | Эксплуатационные эндпоинты |
 
-## Processing model
+## Модель обработки
 
 ```text
 queued → processing → validated | needs_review | failed | dead_letter
 ```
 
-- `validated` — extraction and validation passed.
-- `needs_review` — extraction succeeded but warnings were produced (OCR
-  confidence, total mismatch, duplicate business key, unit conversion).
-- `dead_letter` — processing failed permanently or retries were exhausted.
+- `validated` — извлечение и валидация прошли без замечаний.
+- `needs_review` — документ распознан, но есть предупреждения: низкая
+  уверенность OCR, расхождение суммы, дубль бизнес-ключа, нестандартная единица.
+- `dead_letter` — постоянная ошибка или исчерпаны все повторы.
 
-Idempotency uses SHA-256 content hashes, a PostgreSQL unique constraint and a
-Redis `SET NX EX` lock. Re-uploading the same bytes returns the existing document
-with `duplicate: true`; it does not enqueue another job.
+Идемпотентность обеспечивается SHA-256 содержимого, уникальным индексом в
+PostgreSQL и блокировкой Redis `SET NX EX`. Повторная загрузка тех же байтов
+возвращает существующий документ с `duplicate: true` и не создаёт новую задачу.
 
-## Testing
+## Тестирование
 
 ```bash
 pytest -m "not integration"
 ADQ_INTEGRATION=1 ADQ_API_URL="http://<host>:${ADQ_API_PORT:-8081}" pytest -m integration
 ```
 
-Unit and API tests use SQLite; PostgreSQL, Redis and RabbitMQ are exercised by
-the live integration suite. The coverage gate is 75%.
+Unit/API-тесты используют SQLite; PostgreSQL, Redis и RabbitMQ проверяются
+live-интеграцией. Порог coverage — 75%.
 
 ## CI
 
-The GitHub Actions workflow contains two jobs:
+GitHub Actions содержит два job:
 
-- `test` — installs Python 3.13 and Tesseract, runs unit/API tests with coverage.
-- `compose-smoke` — builds the Compose stack, waits for API health, seeds a
-  webhook receiver and runs the integration suite.
+- `test` — устанавливает Python 3.13 и Tesseract, запускает unit/API-тесты с
+  coverage.
+- `compose-smoke` — собирает Compose-стек, ждёт health API, регистрирует
+  webhook-приёмник и запускает интеграционные тесты.
 
-No production secrets are stored in the repository. The Compose smoke job uses
-CI-only placeholder values; `CI_WEBHOOK_SECRET` can override the webhook signing
-secret if required.
+Production-секреты в репозитории не хранятся. В CI используются только
+тестовые плейсхолдеры; при необходимости секрет подписи webhook можно
+переопределить через `CI_WEBHOOK_SECRET`.
 
-## Design decisions
+## Проектные решения
 
-- **Redis** provides distributed locks and idempotency keys
-  (`adq:lock:upload:*`) and controlled fault injection (`adq:fault:ocr`).
-  Celery results are disabled (`task_ignore_result=True`); Redis is not used as a
-  Celery result backend.
-- **asyncio** is used by FastAPI endpoints, the intake watcher and async HTTP
-  webhook delivery. Celery workers are synchronous; asyncio and Celery are not
-  mixed inside a single task, apart from `asyncio.run()` at the async HTTP boundary.
-- **SQLite** is limited to unit/API tests. PostgreSQL is the production store and
-  is exercised by live integration runs.
-- **`avg_processing_seconds`** measures enqueue-to-completion time, including
-  queue wait. It is not an OCR throughput metric.
-- **Dead-letter documents also emit `document.failed` webhooks**, so consumers
-  learn about failures. `webhook_deliveries.delivered` therefore includes both
-  successful and failed documents.
-- **Authentication** is intentionally minimal: the API key is optional and empty
-  by default; JWT/RBAC are not implemented. A production deployment should add
-  ingress authentication and rate limiting.
+- **Redis** используется для distributed locks и идемпотентности
+  (`adq:lock:upload:*`) и управляемой инъекции сбоев (`adq:fault:ocr`).
+  Результаты Celery отключены (`task_ignore_result=True`); Redis не используется
+  как result backend.
+- **asyncio** применяется в FastAPI, intake-сервисе и async HTTP для webhook.
+  Celery-воркеры синхронные; asyncio и Celery не смешиваются внутри одной задачи,
+  кроме `asyncio.run()` на границе async HTTP.
+- **SQLite** используется только в unit/API-тестах. PostgreSQL — production-
+  хранилище и проверяется live-интеграцией.
+- **`avg_processing_seconds`** — время от постановки в очередь до завершения,
+  включая ожидание. Это не метрика производительности OCR.
+- **Dead-letter документы тоже отправляют webhook `document.failed`**, чтобы
+  потребители узнавали о неудаче. Поэтому `webhook_deliveries.delivered`
+  включает и успешные, и проваленные документы.
+- **Аутентификация** намеренно минимальна: API-ключ опционален и по умолчанию
+  пуст; JWT/RBAC не реализованы. Для production нужен ingress, аутентификация
+  и ограничение скорости.
 
-## Project structure
+## Структура проекта
 
 ```text
 app/
-  api/            # FastAPI routers
-  services/       # extraction, OCR, validation, webhooks, faults
-  tasks/          # Celery application and tasks
-  workers/        # mailbox and folder intake
-alembic/          # database migrations
-examples/inbox/   # synthetic sample batch
-scripts/          # sample-batch builder
-tests/            # unit, API and integration tests
-webhook_sink/     # reference webhook receiver
-docs/             # architecture and operations notes
+  api/            # маршруты FastAPI
+  services/       # извлечение, OCR, валидация, webhooks, faults
+  tasks/          # Celery-приложение и задачи
+  workers/        # intake почты и папки
+alembic/          # миграции БД
+examples/inbox/   # синтетическая примерная пачка
+scripts/          # генератор примерной пачки
+tests/            # unit, API и integration тесты
+webhook_sink/     # эталонный приёмник webhook
+docs/             # архитектура и runbook
 ```
 
-## Sample data
+## Пример данных
 
-`examples/inbox/sample-batch-01/` contains only synthetic documents. Names,
-identifiers, addresses and amounts are fictional placeholders such as
-`ACME Sample LLC` and `INV-2099-0042`. The batch includes valid invoices, OCR
-scans, duplicates, validation defects, an unsupported archive and a truncated
-PDF. Regenerate it with:
+`examples/inbox/sample-batch-01/` содержит только синтетические документы.
+Имена, идентификаторы, адреса и суммы вымышлены: `ACME Sample LLC`,
+`INV-2099-0042`, `QA-2099-0001`, `sender@example.com`. В пачке есть валидные
+счета, OCR-сканы, дубли, документы с ошибками валидации, неподдерживаемый архив
+и обрезанный PDF. Пересобрать пачку:
 
 ```bash
 python scripts/build_sample_batch.py
 ```
 
-## License
+## Документация
 
-MIT. See [LICENSE](LICENSE).
+- [Архитектура](docs/architecture.md)
+- [Runbook](docs/runbook.md)
+- [Contributing](CONTRIBUTING.md)
+
+## Лицензия
+
+MIT. См. [LICENSE](LICENSE).

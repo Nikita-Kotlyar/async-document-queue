@@ -1,6 +1,6 @@
 # Runbook
 
-## Health checks
+## Проверки здоровья
 
 ```bash
 curl "http://<host>:${ADQ_API_PORT:-8081}/health"
@@ -8,9 +8,9 @@ curl "http://<host>:${ADQ_API_PORT:-8081}/ready"
 curl "http://<host>:${ADQ_API_PORT:-8081}/metrics"
 ```
 
-`/ready` verifies PostgreSQL, Redis and the AMQP broker.
+`/ready` проверяет PostgreSQL, Redis и AMQP-брокер.
 
-## Logs
+## Логи
 
 ```bash
 docker compose logs -f api
@@ -19,29 +19,29 @@ docker compose logs -f intake
 docker compose logs -f webhook-sink
 ```
 
-## Queue inspection
+## Очереди
 
-RabbitMQ Management is available on `ADQ_RABBITMQ_MANAGEMENT_PORT` (default
-`15672`). CLI alternative:
+RabbitMQ Management доступен на порту `ADQ_RABBITMQ_MANAGEMENT_PORT` (по
+умолчанию `15672`). Альтернатива через CLI:
 
 ```bash
 docker compose exec -T rabbitmq rabbitmqctl list_queues name messages consumers
 ```
 
-`documents`, `ocr`, `webhooks` and `maintenance` should normally have zero ready
-messages. `dlq` holds messages that require operator attention.
+Очереди `documents`, `ocr`, `webhooks` и `maintenance` в норме должны иметь ноль
+готовых сообщений. `dlq` содержит сообщения, требующие внимания оператора.
 
-## Dead-letter replay
+## Повтор dead-letter
 
 ```bash
 curl "http://<host>:${ADQ_API_PORT:-8081}/api/v1/dead-letter"
 curl -X POST "http://<host>:${ADQ_API_PORT:-8081}/api/v1/dead-letter/{id}/retry"
 ```
 
-Replaying a corrupt or unsupported document will usually return it to the
-dead-letter queue; inspect the reason before replaying.
+Повтор повреждённого или неподдерживаемого документа обычно снова вернёт его в
+dead-letter; перед повтором изучи причину.
 
-## Migrations
+## Миграции
 
 ```bash
 docker compose exec -T api alembic current
@@ -49,25 +49,26 @@ docker compose exec -T api alembic upgrade head
 docker compose exec -T api alembic check
 ```
 
-## Backup and restore
+## Backup и restore
 
 ```bash
 docker compose exec -T db pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB" > backup.sql
 cat backup.sql | docker compose exec -T db psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"
 ```
 
-## Scaling
+## Масштабирование
 
-- Increase `worker` concurrency for CPU-bound OCR.
-- Add a second worker with `-Q ocr` to isolate slow scans from text documents.
-- Keep `worker_prefetch_multiplier=1` so a crashed worker does not hold a large
-  batch of unacknowledged messages.
+- Увеличивай concurrency `worker` для CPU-затратного OCR.
+- Добавляй отдельный worker с `-Q ocr`, чтобы медленные сканы не блокировали
+  текстовые документы.
+- Сохраняй `worker_prefetch_multiplier=1`, чтобы упавший worker не держал
+  большое количество неподтверждённых сообщений.
 
-## Failure modes
+## Типовые сбои
 
-| Symptom | Check | Action |
+| Симптом | Что проверить | Действие |
 |---|---|---|
-| Documents stay `queued` | `worker` logs, RabbitMQ queue depth | Verify task registration and broker connectivity |
-| Webhook deliveries stay `retrying` | `webhook_deliveries.last_error` | Check receiver availability and HMAC secret |
-| `dlq` grows | `dead_letters.reason` | Fix the source document or replay after correction |
-| OCR takes too long | `ocr` queue depth | Add OCR workers or lower page/DPI limits |
+| Документы остаются в `queued` | Логи `worker`, глубину очередей RabbitMQ | Проверить регистрацию задач и доступность брокера |
+| Webhook остаётся в `retrying` | `webhook_deliveries.last_error` | Проверить получателя и секрет HMAC |
+| `dlq` растёт | `dead_letters.reason` | Исправить исходный документ или воспроизвести после исправления |
+| OCR выполняется слишком долго | Глубину очереди `ocr` | Добавить OCR-воркеры или уменьшить лимит страниц/DPI |
