@@ -1,15 +1,15 @@
-## Summary
+## Что изменено
 
-Describe the change and the problem it solves.
+Опиши изменение и проблему, которую оно решает.
 
-## Verification
+## Проверка
 
-- [ ] Unit/API tests pass
-- [ ] Integration tests pass (if applicable)
-- [ ] Ruff format and lint pass
-- [ ] No secrets, `.env` files or local paths are committed
-- [ ] Documentation updated
+- [ ] Unit/API-тесты проходят
+- [ ] Интеграционные тесты проходят (если применимо)
+- [ ] Ruff format и lint проходят
+- [ ] В коммит не попали секреты, `.env` и локальные пути
+- [ ] Документация обновлена
 
-## Notes
+## Примечания
 
-Anything reviewers should know about trade-offs or follow-up work.
+Что ревьюеру важно знать о компромиссах и дальнейших шагах.

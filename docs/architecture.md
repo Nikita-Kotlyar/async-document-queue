@@ -1,68 +1,69 @@
-# Architecture
+# Архитектура
 
-## Components
+## Компоненты
 
-| Layer | Responsibility |
+| Слой | Ответственность |
 |---|---|
-| API | Upload, document queries, issue registry, dead-letter replay, webhook endpoint registration |
-| Intake | Watches a mailbox directory and a folder drop for new documents |
-| Queue | RabbitMQ exchanges and queues for documents, OCR, webhooks and maintenance |
-| Worker | Celery tasks for extraction, OCR, validation and webhook delivery |
-| Store | PostgreSQL for documents, extractions, jobs, attempts, issues, deliveries and audit events |
-| Locks | Redis for upload locks, idempotency and controlled fault injection |
-| Receiver | Reference webhook sink used by the integration suite |
+| API | Загрузка, запросы документов, реестр проблем, повтор dead-letter, регистрация webhook |
+| Intake | Наблюдение за почтовым каталогом и папкой drop |
+| Очередь | RabbitMQ exchanges и очереди для документов, OCR, webhooks и обслуживания |
+| Worker | Celery-задачи извлечения, OCR, валидации и доставки webhook |
+| Хранилище | PostgreSQL: документы, извлечения, задачи, попытки, проблемы, доставки, аудит |
+| Блокировки | Redis: блокировки загрузки, идемпотентность, управляемая инъекция сбоев |
+| Приёмник | Эталонный webhook-sink для интеграционных тестов |
 
-## Processing flow
+## Поток обработки
 
-1. Intake or the API stores the file under a content-addressed path.
-2. `documents.sha256` is unique; an existing hash returns the existing record.
-3. A `process_document` task is published to the `documents` queue.
-4. Text PDF, DOCX, XLSX and CSV files are parsed directly.
-5. PNG and image-only PDF files are routed to the `ocr` queue.
-6. Extracted fields are validated and persisted with issue records.
-7. `document.processed`, `document.needs_review` or `document.failed` webhook
-   deliveries are created.
-8. Webhook delivery uses HMAC-SHA256, stable event ids and exponential retries.
-9. Permanent failures and exhausted retries are recorded in `dead_letters` and
-   published to the `dlq` queue.
+1. Intake или API сохраняет файл по content-addressed пути.
+2. `documents.sha256` уникален; при совпадении возвращается существующая запись.
+3. В очередь `documents` публикуется задача `process_document`.
+4. PDF с текстовым слоем, DOCX, XLSX и CSV разбираются напрямую.
+5. PNG и PDF без текстового слоя направляются в очередь `ocr`.
+6. Извлечённые поля валидируются и сохраняются вместе с проблемами.
+7. Создаются доставки `document.processed`, `document.needs_review` или
+   `document.failed`.
+8. Webhook-доставка использует HMAC-SHA256, стабильные event id и
+   экспоненциальные повторы.
+9. Постоянные ошибки и исчерпанные повторы попадают в `dead_letters` и очередь
+   `dlq`.
 
-## Status model
+## Модель статусов
 
 ```text
 queued → processing → validated | needs_review | failed | dead_letter
 ```
 
-`validated` means no validation issues were found. `needs_review` means the
-document was extracted but requires human attention. `dead_letter` means the
-document cannot be processed without intervention.
+`validated` означает, что проблем валидации нет. `needs_review` означает, что
+документ извлечён, но требует ручного внимания. `dead_letter` означает, что
+документ не может быть обработан без вмешательства.
 
-## Delivery guarantees
+## Гарантии доставки
 
-- Celery uses `task_acks_late=True`, `task_reject_on_worker_lost=True` and
+- Celery использует `task_acks_late=True`, `task_reject_on_worker_lost=True` и
   `worker_prefetch_multiplier=1`.
-- `task_acks_on_failure_or_timeout=False` allows exhausted tasks to reach the
-  dead-letter exchange.
-- Every document has one `process_document` job and, for OCR inputs, one
-  additional `ocr_document` job.
-- Webhook deliveries are tracked per endpoint and event type; replayed deliveries
-  keep the same event id.
+- `task_acks_on_failure_or_timeout=False` позволяет исчерпанным задачам попадать
+  в dead-letter exchange.
+- На каждый документ создаётся одна задача `process_document`; для OCR-входов
+  дополнительно создаётся `ocr_document`.
+- Webhook-доставки учитываются отдельно по endpoint и типу события; повторное
+  воспроизведение сохраняет тот же event id.
 
-## Data model
+## Модель данных
 
-| Table | Purpose |
+| Таблица | Назначение |
 |---|---|
-| `documents` | Canonical document record and current status |
-| `extractions` | Parsed fields, engine, confidence and warnings |
-| `jobs` | Task-level execution records |
-| `job_attempts` | Individual retry attempts |
-| `document_issues` | Validation findings |
-| `webhook_endpoints` | Registered receivers |
-| `webhook_deliveries` | Delivery state, attempts and response codes |
-| `dead_letters` | Permanent failures and exhausted retries |
-| `idempotency_keys` | HTTP idempotency key cache |
-| `audit_events` | Upload, reprocess and replay audit trail |
+| `documents` | Канонический документ и текущий статус |
+| `extractions` | Извлечённые поля, движок, уверенность и предупреждения |
+| `jobs` | Записи выполнения задач |
+| `job_attempts` | Отдельные попытки повторов |
+| `document_issues` | Найденные проблемы валидации |
+| `webhook_endpoints` | Зарегистрированные получатели |
+| `webhook_deliveries` | Состояние доставки, попытки и коды ответов |
+| `dead_letters` | Постоянные ошибки и исчерпанные повторы |
+| `idempotency_keys` | Кэш HTTP-ключей идемпотентности |
+| `audit_events` | Аудит загрузок, повторных запусков и воспроизведений |
 
-## Non-goals
+## Что не входит в проект
 
-The service does not provide JWT/RBAC, multi-tenancy, Kubernetes manifests or a
-managed cloud deployment. Those concerns belong to the surrounding platform.
+Сервис не предоставляет JWT/RBAC, мультитенантность, Kubernetes-манифесты и
+управляемый cloud-деплой. Эти задачи относятся к окружающей платформе.

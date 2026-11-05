@@ -1,6 +1,6 @@
-# Contributing
+# Участие в разработке
 
-## Setup
+## Установка
 
 ```bash
 uv venv --python 3.13
@@ -8,7 +8,7 @@ uv pip install --python .venv/bin/python -e ".[dev]"
 cp .env.example .env
 ```
 
-## Checks
+## Проверки
 
 ```bash
 ruff format app tests scripts webhook_sink
@@ -17,15 +17,15 @@ pytest -m "not integration"
 ADQ_INTEGRATION=1 pytest -m integration
 ```
 
-Integration tests require the Compose stack and `ADQ_API_URL`.
+Интеграционные тесты требуют запущенного Compose-стека и `ADQ_API_URL`.
 
-## Commit style
+## Стиль коммитов
 
 Conventional Commits: `feat:`, `fix:`, `test:`, `docs:`, `chore:`, `refactor:`.
 
-## Pull requests
+## Pull request
 
-- Keep one topic per pull request.
-- Add or update tests for behavior changes.
-- Update `.env.example` when adding configuration.
-- Do not commit `.env`, database files, coverage artifacts or generated logs.
+- Один PR — одна тема.
+- Для изменения поведения добавляй или обновляй тесты.
+- При добавлении настройки обновляй `.env.example`.
+- Не коммить `.env`, файлы БД, артефакты coverage и логи.

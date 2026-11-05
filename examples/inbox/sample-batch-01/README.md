@@ -1,5 +1,9 @@
-# Synthetic sample batch
+# Синтетическая примерная пачка
 
-All documents, names, identifiers, addresses and amounts in this directory are fictional.
-The batch exercises valid invoices, OCR scans, duplicates, validation issues and dead-letter paths.
-Regenerate with `python scripts/build_sample_batch.py`.
+Все документы, имена, идентификаторы, адреса и суммы в этом каталоге вымышлены.
+Пачка проверяет валидные счета, OCR-сканы, дубли, ошибки валидации и сценарии
+dead-letter. Пересобрать пачку:
+
+```bash
+python scripts/build_sample_batch.py
+```
