@@ -1,0 +1,4 @@
+﻿sku;name;qty;unit;price_rub;amount_rub
+Поставщик;ACME Sample LLC;ИНН;0000000000
+Счёт;INV-2099-0043;Дата;2026-01-16
+CBL-SAMPLE-001;Sample cable 3x2.5;-10;м;10.00;-100.00

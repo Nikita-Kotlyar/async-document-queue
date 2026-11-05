@@ -1,0 +1,155 @@
+name: async-document-queue
+
+x-app-env: &app-env
+  ADQ_ENVIRONMENT: ${ADQ_ENVIRONMENT:-production}
+  ADQ_DATABASE_URL: ${ADQ_DATABASE_URL:?ADQ_DATABASE_URL required}
+  ADQ_SYNC_DATABASE_URL: ${ADQ_SYNC_DATABASE_URL:?ADQ_SYNC_DATABASE_URL required}
+  ADQ_REDIS_URL: ${ADQ_REDIS_URL:-redis://redis:6379/0}
+  ADQ_RABBITMQ_URL: ${ADQ_BROKER_URL:?ADQ_BROKER_URL required}
+  ADQ_STORAGE_DIR: /app/storage
+  ADQ_STATE_DIR: /app/state
+  ADQ_TESSERACT_CMD: /usr/bin/tesseract
+  ADQ_OCR_LANG: rus+eng
+  ADQ_WEBHOOK_SECRET: ${ADQ_WEBHOOK_SECRET:?ADQ_WEBHOOK_SECRET required}
+  ADQ_WEBHOOK_MAX_ATTEMPTS: "4"
+  ADQ_TASK_MAX_RETRIES: "3"
+  ADQ_MAX_UPLOAD_MB: "25"
+  ADQ_ENABLE_FAULT_INJECTION: "true"
+  ADQ_API_KEY: ${ADQ_API_KEY:-}
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-adq}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD required}
+      POSTGRES_DB: ${POSTGRES_DB:-adq}
+    ports:
+      - "${ADQ_POSTGRES_PORT:-5433}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-adq} -d ${POSTGRES_DB:-adq}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "${ADQ_REDIS_PORT:-6380}:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER:-adq}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:?RABBITMQ_DEFAULT_PASS required}
+    ports:
+      - "${ADQ_RABBITMQ_PORT:-5672}:5672"
+      - "${ADQ_RABBITMQ_MANAGEMENT_PORT:-15672}:15672"
+    volumes:
+      - rabbitmqdata:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 8s
+      retries: 12
+
+  api:
+    build: .
+    environment:
+      <<: *app-env
+    volumes:
+      - storage:/app/storage
+    ports:
+      - "${ADQ_API_PORT:-8081}:8000"
+    command: >
+      sh -c "alembic upgrade head &&
+             uvicorn app.main:app --host 0.0.0.0 --port 8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  worker:
+    build: .
+    environment:
+      <<: *app-env
+    volumes:
+      - storage:/app/storage
+    command: >
+      celery -A app.tasks.celery_app:celery_app worker
+      -Q documents,ocr,webhooks,maintenance
+      -l INFO --concurrency=2
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  beat:
+    build: .
+    environment:
+      <<: *app-env
+    volumes:
+      - storage:/app/storage
+    command: celery -A app.tasks.celery_app:celery_app beat -l INFO
+    depends_on:
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  webhook-sink:
+    build: .
+    environment:
+      ADQ_WEBHOOK_SECRET: ${ADQ_WEBHOOK_SECRET:?ADQ_WEBHOOK_SECRET required}
+      FAIL_FIRST_N: "2"
+      FAIL_STATUS: "503"
+    ports:
+      - "${ADQ_WEBHOOK_PORT:-8090}:8090"
+    command: uvicorn webhook_sink.main:app --host 0.0.0.0 --port 8090
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8090/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  intake:
+    build: .
+    environment:
+      ADQ_API_URL: http://api:8000
+      ADQ_INTAKE_DIR: /data/intake
+      ADQ_STATE_DIR: /app/state
+      ADQ_API_KEY: ${ADQ_API_KEY:-}
+    volumes:
+      - ./examples/inbox/sample-batch-01:/data/intake:ro
+      - intake_state:/app/state
+    command: python -m app.workers.intake
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  pgdata:
+  redisdata:
+  rabbitmqdata:
+  storage:
+  intake_state:

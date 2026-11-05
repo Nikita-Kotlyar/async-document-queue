@@ -1,0 +1,25 @@
+From: sender@example.com
+To: recipient@example.com
+Subject: Document archive
+Date: Thu, 15 Jan 2026 09:06:00 +0000
+Message-ID: <sample-006@example.com>
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="===============5586648169796808688=="
+
+--===============5586648169796808688==
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 7bit
+
+Synthetic sample message for the document intake pipeline.
+
+--===============5586648169796808688==
+Content-Type: application/zip
+Content-Transfer-Encoding: base64
+Content-Disposition: attachment; filename="unsupported_sample.zip"
+MIME-Version: 1.0
+
+UEsDBBQAAAAAAJWcZV2vo0p+HAAAABwAAAAIAAAAc2Nhbi50eHRTeW50aGV0aWMgYXJjaGl2ZSBh
+dHRhY2htZW50UEsBAhQAFAAAAAAAlZxlXa+jSn4cAAAAHAAAAAgAAAAAAAAAAAAAAIABAAAAAHNj
+YW4udHh0UEsFBgAAAAABAAEANgAAAEIAAAAAAA==
+
+--===============5586648169796808688==--
