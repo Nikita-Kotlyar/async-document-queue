@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:
 
 jobs:
   test:
@@ -20,9 +20,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y tesseract-ocr tesseract-ocr-rus
       - name: Install dependencies
-        run: |
-          uv venv --python 3.13
-          uv pip install --python .venv/bin/python -e ".[dev]"
+        run: uv pip install --python .venv/bin/python -e ".[dev]"
       - name: Unit and API tests
         env:
           PYTHONIOENCODING: utf-8
@@ -42,9 +40,7 @@ jobs:
         with:
           python-version: "3.13"
       - name: Install test dependencies
-        run: |
-          uv venv --python 3.13
-          uv pip install --python .venv/bin/python -e ".[dev]"
+        run: uv pip install --python .venv/bin/python -e ".[dev]"
       - name: Prepare CI environment
         run: |
           cat > .env <<EOF
